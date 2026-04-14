@@ -15,7 +15,7 @@ logging.basicConfig(filename="app.log", level=logging.INFO)
 # ================= DATA =================
 @st.cache_data
 def load_data():
-    return pd.read_csv(r"C:\Users\dylan\Downloads\Finance_data.csv")
+    return pd.read_csv("Finance_data.csv")
 
 df = load_data()
 
