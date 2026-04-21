@@ -35,25 +35,28 @@ df = load_data(uploaded_file)
 
 # ---------------- OPTIONAL LLM ----------------
 client = None
+
 if GROQ_AVAILABLE:
     try:
-        client = Groq(api_key=st.secrets['GROQ_API_KEY'])
+        client = Groq(
+            api_key=st.secrets["GROQ_API_KEY"]
+        )
     except Exception:
         client = None
 
 def ask_llm(question, data):
 
     if client is None:
-        return 'LLM unavailable (missing groq package or API key). Analytics features still work.'
+        return "LLM unavailable (missing groq package or API key). Analytics features still work."
 
     context = data.head(15).to_string()
 
     completion = client.chat.completions.create(
-        model='llama3-8b-8192',
+        model="llama3-8b-8192",
         messages=[
             {
-                'role':'user',
-                'content': f'''Analyze this data:\n{context}\n\nQuestion: {question}'''
+                "role":"user",
+                "content":f"Analyze this data:\n{context}\n\nQuestion: {question}"
             }
         ],
         temperature=0.3
@@ -79,7 +82,7 @@ def run_clustering(data, k=3):
     labels = km.fit_predict(scaled)
 
     result = data.copy()
-    result['Cluster'] = labels
+    result["Cluster"] = labels
 
     return result
 
@@ -100,7 +103,9 @@ if is_numeric:
         float(df[column].mean())
     )
 
-    filtered_df = df[df[column] >= threshold]
+    filtered_df = df[
+        df[column] >= threshold
+    ]
 
 else:
 
@@ -112,7 +117,11 @@ else:
         default=vals[:min(3,len(vals))]
     )
 
-    filtered_df = df[df[column].isin(chosen)] if len(chosen)>0 else df.copy()
+    filtered_df = (
+        df[df[column].isin(chosen)]
+        if len(chosen)>0
+        else df.copy()
+    )
 
 # ---------------- UI ----------------
 st.title('AI-Powered Finance Analytics Dashboard')
@@ -123,9 +132,15 @@ c1.metric('Rows',len(filtered_df))
 c2.metric('Columns',len(df.columns))
 
 if is_numeric:
-    c3.metric('Mean', round(filtered_df[column].mean(),2))
+    c3.metric(
+        'Mean',
+        round(filtered_df[column].mean(),2)
+    )
 else:
-    c3.metric('Unique Values', filtered_df[column].nunique())
+    c3.metric(
+        'Unique Values',
+        filtered_df[column].nunique()
+    )
 
 # ---------------- TABS ----------------
 t1,t2,t3,t4 = st.tabs([
@@ -138,241 +153,24 @@ t1,t2,t3,t4 = st.tabs([
 # Overview
 with t1:
 
-    st.dataframe(filtered_df.head(50))
-    st.write(filtered_df.describe(include='all'))
-
-# Visuals
-with t2:
-
-    if is_numeric:
-
-Save as `app.py`
-
-```python
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import logging
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
-from groq import Groq
-
-# ================= CONFIG =================
-st.set_page_config(page_title="AI Finance Dashboard", layout="wide")
-
-# ================= LOGGING =================
-logging.basicConfig(filename="app.log", level=logging.INFO)
-
-def log_event(msg):
-    logging.info(msg)
-
-# ================= GROQ CLIENT =================
-# Put GROQ_API_KEY in .streamlit/secrets.toml
-# GROQ_API_KEY="your_key_here"
-
-client = Groq(
-    api_key=st.secrets["GROQ_API_KEY"]
-)
-
-# ================= DATA UPLOAD =================
-st.sidebar.markdown("## Upload Dataset")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Upload CSV File",
-    type=["csv"]
-)
-
-@st.cache_data
-def load_data(file):
-    return pd.read_csv(file)
-
-if uploaded_file is not None:
-    df = load_data(uploaded_file)
-else:
-    st.title("📊 AI-Powered Finance Analytics Dashboard")
-    st.info("Upload a CSV file from the sidebar to begin analysis.")
-    st.stop()
-
-# ================= AUTO SCHEMA =================
-numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-cat_cols = df.select_dtypes(exclude=['number']).columns.tolist()
-
-st.sidebar.write("Detected Numeric Features:", len(numeric_cols))
-st.sidebar.write("Detected Categorical Features:", len(cat_cols))
-
-numeric_df = df.select_dtypes(include=['number']).dropna()
-
-# ================= CLUSTERING =================
-def run_clustering(data, k=3):
-
-    if data.shape[1] < 2:
-        return None
-
-    scaler = StandardScaler()
-    scaled = scaler.fit_transform(data)
-
-    model = KMeans(
-        n_clusters=k,
-        random_state=42,
-        n_init=10
-    )
-
-    clusters = model.fit_predict(scaled)
-
-    result = data.copy()
-    result["Cluster"] = clusters
-
-    return result
-
-# ================= LLM =================
-def ask_llm(question, data):
-
-    context = data.head(20).to_string()
-
-    prompt=f"""
-You are an expert financial data analyst.
-
-Use this uploaded dataset:
-
-{context}
-
-Answer the user question:
-
-{question}
-
-Provide:
-- Insights
-- Risks
-- Trends
-- Recommendations
-"""
-
-    completion = client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[
-            {
-                "role":"user",
-                "content":prompt
-            }
-        ],
-        temperature=0.3
-    )
-
-    return completion.choices[0].message.content
-
-# ================= CHAT MEMORY =================
-if "messages" not in st.session_state:
-    st.session_state.messages=[]
-
-# ================= UI =================
-st.title("📊 AI-Powered Finance Analytics Dashboard")
-
-st.markdown("""
-### 🚀 Capabilities
-- CSV Upload Analytics
-- Interactive Filtering
-- AI Insights (LLM Chat)
-- Customer Segmentation (Clustering)
-- Interactive Visualizations
-""")
-
-# ================= SIDEBAR FILTERS =================
-st.sidebar.header("⚙️ Controls")
-
-column = st.sidebar.selectbox(
-    "Select Column",
-    df.columns
-)
-
-is_numeric = pd.api.types.is_numeric_dtype(df[column])
-
-st.sidebar.write(
-    f"Detected Type: {'Numeric' if is_numeric else 'Categorical'}"
-)
-
-if is_numeric:
-
-    threshold = st.sidebar.slider(
-        "Filter Threshold",
-        float(df[column].min()),
-        float(df[column].max()),
-        float(df[column].mean())
-    )
-
-    filtered_df = df[
-        df[column] >= threshold
-    ]
-
-else:
-
-    unique_vals = df[column].dropna().unique()
-
-    selected_vals = st.sidebar.multiselect(
-        "Select Categories",
-        options=unique_vals,
-        default=unique_vals[:min(3,len(unique_vals))]
-    )
-
-    if len(selected_vals)>0:
-        filtered_df = df[
-            df[column].isin(selected_vals)
-        ]
-    else:
-        filtered_df=df.copy()
-
-# ================= METRICS =================
-c1,c2,c3 = st.columns(3)
-
-c1.metric("Rows",len(filtered_df))
-c2.metric("Columns",len(df.columns))
-
-if is_numeric:
-    c3.metric(
-        "Mean",
-        round(filtered_df[column].mean(),2)
-    )
-else:
-    c3.metric(
-        "Unique Values",
-        filtered_df[column].nunique()
-    )
-
-# ================= TABS =================
-tab1,tab2,tab3,tab4 = st.tabs([
-    "📊 Overview",
-    "📈 Visuals",
-    "🤖 AI Insights",
-    "🧠 Clustering"
-])
-
-# ================= TAB 1 =================
-with tab1:
-
-    st.subheader("Dataset")
     st.dataframe(
         filtered_df.head(50)
     )
 
-    st.subheader("Summary Stats")
     st.write(
         filtered_df.describe(
             include='all'
         )
     )
 
-# ================= TAB 2 =================
-with tab2:
-
-    st.subheader(
-        "Interactive Visualizations"
-    )
+# Visuals
+with t2:
 
     if is_numeric:
 
         fig = px.histogram(
             filtered_df,
-            x=column,
-            title=f"{column} Distribution"
+            x=column
         )
 
         st.plotly_chart(
@@ -380,15 +178,15 @@ with tab2:
             use_container_width=True
         )
 
-    if len(numeric_cols) > 1:
+    nums = filtered_df.select_dtypes(
+        include=['number']
+    )
 
-        corr = filtered_df.select_dtypes(
-            include=['number']
-        ).corr()
+    if len(nums.columns) > 1:
 
         fig = px.imshow(
-            corr,
-            title="Correlation Heatmap"
+            nums.corr(),
+            title='Correlation Heatmap'
         )
 
         st.plotly_chart(
@@ -396,105 +194,84 @@ with tab2:
             use_container_width=True
         )
 
-# ================= TAB 3 =================
-with tab3:
+# AI Chat
+with t3:
 
-    st.subheader(
-        "Ask AI About Your Uploaded Data"
-    )
+    if 'messages' not in st.session_state:
+        st.session_state.messages=[]
 
-    for msg in st.session_state.messages:
+    for m in st.session_state.messages:
 
         with st.chat_message(
-            msg["role"]
+            m['role']
         ):
             st.write(
-                msg["content"]
+                m['content']
             )
 
-    user_input = st.chat_input(
-        "Ask about trends, risk, anomalies..."
+    q = st.chat_input(
+        'Ask about your uploaded data...'
     )
 
-    if user_input:
+    if q:
 
-        log_event(
-            f"User Question: {user_input}"
+        st.session_state.messages.append({
+            'role':'user',
+            'content':q
+        })
+
+        answer = ask_llm(
+            q,
+            filtered_df
         )
 
-        st.session_state.messages.append(
-            {
-                "role":"user",
-                "content":user_input
-            }
-        )
+        st.session_state.messages.append({
+            'role':'assistant',
+            'content':answer
+        })
 
-        with st.chat_message("user"):
-            st.write(user_input)
+        st.rerun()
 
-        with st.spinner(
-            "Analyzing..."
-        ):
-
-            response = ask_llm(
-                user_input,
-                filtered_df
-            )
-
-        st.session_state.messages.append(
-            {
-                "role":"assistant",
-                "content":response
-            }
-        )
-
-        with st.chat_message(
-            "assistant"
-        ):
-            st.write(response)
-
-# ================= TAB 4 =================
-with tab4:
-
-    st.subheader(
-        "Customer / Financial Segmentation"
-    )
+# Clustering
+with t4:
 
     k = st.slider(
-        "Select Number of Clusters",
+        'Clusters',
         2,
         6,
         3
     )
 
     if st.button(
-        "Run Clustering"
+        'Run Clustering'
     ):
 
-        filtered_numeric = filtered_df.select_dtypes(
+        num_data = filtered_df.select_dtypes(
             include=['number']
         ).dropna()
 
         clustered = run_clustering(
-            filtered_numeric,
+            num_data,
             k
         )
 
-        if clustered is not None:
+        if clustered is None:
+
+            st.warning(
+                'Need at least two numeric columns.'
+            )
+
+        else:
 
             st.dataframe(
                 clustered.head()
             )
 
-            x_col = clustered.columns[0]
-            y_col = clustered.columns[1]
-
             fig = px.scatter(
                 clustered,
-                x=x_col,
-                y=y_col,
-                color="Cluster",
-                title="Cluster Visualization"
+                x=clustered.columns[0],
+                y=clustered.columns[1],
+                color='Cluster'
             )
 
             st.plotly_chart(
@@ -502,26 +279,9 @@ with tab4:
                 use_container_width=True
             )
 
-        else:
-            st.warning(
-                "Need at least two numeric features for clustering."
-            )
-
-# ================= DOWNLOAD =================
-st.markdown("---")
-
+# ---------------- DOWNLOAD ----------------
 st.download_button(
-    label="⬇️ Download Filtered Data",
-    data=filtered_df.to_csv(index=False),
-    file_name="filtered_finance_data.csv"
+    'Download Filtered CSV',
+    filtered_df.to_csv(index=False),
+    file_name='filtered_data.csv'
 )
-
-# ================= SYSTEM HEALTH =================
-st.sidebar.markdown(
-    "### 🩺 System Health"
-)
-
-st.sidebar.success("Running")
-st.sidebar.write("Logging: Active")
-st.sidebar.write("LLM: Groq Llama3 Connected")
-st.sidebar.write("Model: KMeans Ready")
