@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from huggingface_hub import InferenceClient
 
 # ================= CONFIG =================
-st.set_page_config(page_title="AI Finance Dashboard", layout="wide")
+st.set_page_config(page_title="AI-Automated Analyst Dashboard", layout="wide")
 
 # ================= LOGGING =================
 logging.basicConfig(level=logging.INFO)
@@ -143,7 +143,7 @@ Format your answer as:
     return completion.choices[0].message.content.strip()
 
 # ================= UI =================
-st.title("📊 AI-Powered Finance Analytics Dashboard")
+st.title("📊 AI-Automated Analyst Dashboard")
 
 st.markdown("""
 ### 🚀 Capabilities
