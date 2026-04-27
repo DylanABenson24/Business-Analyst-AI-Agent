@@ -150,7 +150,7 @@ st.markdown("""
 - Upload any CSV dataset
 - Interactive filtering
 - AI insights with Hugging Face API
-- Customer / financial segmentation
+- Segmentation
 - Interactive visualizations
 """)
 
@@ -298,7 +298,7 @@ with tab3:
 
 # ================= TAB 4 =================
 with tab4:
-    st.subheader("Customer / Financial Segmentation")
+    st.subheader("Segmentation")
 
     if numeric_df.shape[1] < 2:
         st.warning("Need at least 2 numeric columns for clustering.")
