@@ -210,14 +210,17 @@ if is_numeric:
     max_val = float(df[column].max())
     default_val = float(df[column].mean())
 
-    threshold = st.sidebar.slider(
-        "Filter Threshold",
-        min_value=min_val,
-        max_value=max_val,
-        value=default_val
+    min_range, max_range = st.sidebar.slider(
+    "Filter Range",
+    min_value=min_val,
+    max_value=max_val,
+    value=(min_val, max_val)
     )
+    
+    filtered_df = df[
+        (df[column] >= min_range) & (df[column] <= max_range)
+    ].copy()
 
-    filtered_df = df[df[column] >= threshold].copy()
 else:
     unique_vals = df[column].dropna().unique().tolist()
 
