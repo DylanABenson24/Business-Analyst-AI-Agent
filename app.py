@@ -18,11 +18,8 @@ def log_event(msg: str) -> None:
     logging.info(msg)
 
 # ================= MODEL CONFIG =================
-# Use an API-served instruct model instead of loading locally
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
 
-# Hugging Face token
-# Prefer environment variable locally: export HF_TOKEN="your_token_here"
 try:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 except Exception:
@@ -31,19 +28,9 @@ except Exception:
 # ================= LOAD HF CLIENT =================
 @st.cache_resource
 def load_hf_client():
-    """
-    Create a Hugging Face InferenceClient once and reuse it.
-    """
     if not HF_TOKEN:
-        raise ValueError(
-            "No Hugging Face token found. Set HF_TOKEN as an environment variable "
-            "or add it to Streamlit secrets."
-        )
-
-    client = InferenceClient(
-        api_key=HF_TOKEN
-    )
-    return client
+        raise ValueError("No Hugging Face token found.")
+    return InferenceClient(api_key=HF_TOKEN)
 
 # ================= DATA LOADING =================
 @st.cache_data
@@ -73,11 +60,16 @@ def run_clustering(data: pd.DataFrame, k: int = 3) -> pd.DataFrame:
 # ================= LLM CONTEXT =================
 def build_context(df: pd.DataFrame) -> str:
     rows, cols = df.shape
-    column_info = "\n".join([f"- {col}: {dtype}" for col, dtype in df.dtypes.items()])
+
+    column_info = "\n".join(
+        [f"- {col}: {dtype}" for col, dtype in df.dtypes.items()]
+    )
+
     sample = df.head(10).to_string(index=False)
 
-    numeric_summary = ""
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    numeric_summary = ""
+
     if numeric_cols:
         numeric_summary = df[numeric_cols].describe().round(2).to_string()
 
@@ -95,46 +87,19 @@ Numeric summary:
 """
     return context.strip()
 
-# ================= LLM (API VERSION) =================
+# ================= LLM =================
 def ask_llm_api(question: str, df: pd.DataFrame, client: InferenceClient) -> str:
     context = build_context(df)
 
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are a financial and business data analyst. "
-                "Answer only from the dataset context provided. "
-                "Do not invent values or conclusions not supported by the data shown. "
-                "If the answer cannot be supported by the dataset context, say that clearly. "
-                "Do not just describe the columns. "
-                "Instead, identify actual patterns, unusual values, possible relationships, missing data concerns, and business-relevant observations. "
-                "Be specific and reference values or categories when possible."
-            ),
+            "content": "You are a data analyst. Answer using only the dataset context."
         },
         {
             "role": "user",
-            "content": f"""
-Here is the dataset context:
-
-{context}
-
-Question:
-{question}
-
-Instructions:
-- Do not give a generic dataset description.
-- Focus on actual patterns in the sample and summary provided.
-- Mention missing values or skew only if supported by the data.
-- If the question asks for trends, give at least 3 specific observations.
-- If the dataset context is insufficient, say exactly what is missing.
-
-Format your answer as:
-1. Direct answer
-2. Key insights
-3. Data limitations
-""".strip(),
-        },
+            "content": f"{context}\n\nQuestion:\n{question}"
+        }
     ]
 
     completion = client.chat.completions.create(
@@ -146,7 +111,7 @@ Format your answer as:
 
     return completion.choices[0].message.content.strip()
 
-# ================= MISSING VALUES HELPER =================
+# ================= MISSING VALUES =================
 def get_missing_summary(df: pd.DataFrame) -> pd.DataFrame:
     missing_counts = df.isna().sum()
     missing_percent = (missing_counts / len(df)) * 100
@@ -157,58 +122,27 @@ def get_missing_summary(df: pd.DataFrame) -> pd.DataFrame:
         "Missing %": missing_percent.round(2).values
     })
 
-    return summary.sort_values(by="Missing Count", ascending=False).reset_index(drop=True)
-
-
+    return summary.sort_values(by="Missing Count", ascending=False)
 
 # ================= UI =================
 st.title("📊 AI-Automated Analyst Dashboard")
 
-st.markdown("""
-### 🚀 Capabilities
-- Upload any CSV dataset
-- Interactive filtering
-- AI insights with Hugging Face API
-- Segmentation
-- Interactive visualizations
-""")
-
-# ================= SIDEBAR =================
 st.sidebar.header("⚙️ Controls")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Upload a CSV dataset",
-    type=["csv"]
-)
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded_file is None:
-    st.info("Upload a CSV file in the sidebar to begin.")
     st.stop()
 
-try:
-    df = load_uploaded_data(uploaded_file)
-except Exception as e:
-    st.error(f"Could not read the CSV file: {e}")
-    st.stop()
-
-if df.empty:
-    st.warning("The uploaded dataset is empty.")
-    st.stop()
-
-st.sidebar.success(f"Loaded: {uploaded_file.name}")
-st.sidebar.write(f"Rows: {df.shape[0]}")
-st.sidebar.write(f"Columns: {df.shape[1]}")
+df = load_uploaded_data(uploaded_file)
 
 column = st.sidebar.selectbox("Select Column", df.columns)
 is_numeric = pd.api.types.is_numeric_dtype(df[column])
-
-st.sidebar.write(f"Detected Type: {'Numeric' if is_numeric else 'Categorical'}")
 
 # ================= FILTER LOGIC =================
 if is_numeric:
     min_val = float(df[column].min())
     max_val = float(df[column].max())
-    default_val = float(df[column].mean())
 
     min_range, max_range = st.sidebar.slider(
         "Filter Range",
@@ -218,7 +152,8 @@ if is_numeric:
     )
 
     filtered_df = df[
-        (df[column] >= min_range) & (df[column] <= max_range)
+        (df[column] >= min_range) &
+        (df[column] <= max_range)
     ].copy()
 
 else:
@@ -235,175 +170,17 @@ else:
         if selected_vals else df.copy()
     )
 
-# ================= NUMERIC DATA =================
 numeric_df = get_numeric_df(filtered_df)
 
 # ================= METRICS =================
-c1, c2, c3 = st.columns(3)
-c1.metric("Rows", len(filtered_df))
-c2.metric("Columns", len(df.columns))
+st.write(filtered_df.head())
 
-if is_numeric and not filtered_df.empty:
-    c3.metric("Mean", round(filtered_df[column].mean(), 2))
+# ================= VISUAL =================
+if is_numeric:
+    fig = px.histogram(filtered_df, x=column)
 else:
-    c3.metric("Unique Values", filtered_df[column].nunique())
+    vc = filtered_df[column].value_counts().reset_index()
+    vc.columns = [column, "Count"]
+    fig = px.bar(vc, x=column, y="Count")
 
-# ================= LOAD API CLIENT =================
-with st.spinner("Connecting to Hugging Face API..."):
-    try:
-        hf_client = load_hf_client()
-        api_loaded = True
-    except Exception as e:
-        st.error(f"API client failed to load: {e}")
-        hf_client = None
-        api_loaded = False
-
-# ================= TABS =================
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Overview",
-    "📈 Visuals",
-    "🤖 AI Insights",
-    "🧠 Clustering"
-])
-
-# ================= TAB 1 =================
-with tab1:
-    st.subheader("Dataset Preview")
-    st.dataframe(filtered_df.head(50), use_container_width=True)
-
-    st.subheader("Summary Stats")
-    st.write(filtered_df.describe(include="all"))
-
-    st.subheader("Missing Values Overview")
-
-    # Use ORIGINAL df (not filtered)
-    missing_df = get_missing_summary(df)
-    
-    # Metrics (clean for demo)
-    total_missing = df.isna().sum().sum()
-    total_cells = df.shape[0] * df.shape[1]
-    missing_ratio = (total_missing / total_cells) * 100
-    cols_with_missing = (df.isna().sum() > 0).sum()
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Missing Values", int(total_missing))
-    m2.metric("Missing %", f"{missing_ratio:.2f}%")
-    m3.metric("Columns Affected", int(cols_with_missing))
-    
-    st.dataframe(missing_df, use_container_width=True)
-    
-    # Highlight only problematic columns
-    problem_cols = missing_df[missing_df["Missing Count"] > 0]
-    
-    if not problem_cols.empty:
-        st.warning("⚠️ Columns with missing data detected")
-        st.dataframe(problem_cols, use_container_width=True)
-    else:
-        st.success("✅ No missing values detected")
-    
-# ================= TAB 2 =================
-with tab2:
-    st.subheader("Interactive Visualizations")
-
-    if is_numeric and not filtered_df.empty:
-        fig = px.histogram(filtered_df, x=column, title=f"{column} Distribution")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        value_counts = filtered_df[column].value_counts().reset_index()
-        value_counts.columns = [column, "Count"]
-        fig = px.bar(value_counts, x=column, y="Count", title=f"{column} Category Counts")
-        st.plotly_chart(fig, use_container_width=True)
-
-    if len(numeric_df.columns) > 1:
-        corr = numeric_df.corr(numeric_only=True)
-        fig = px.imshow(
-            corr,
-            text_auto=False,
-            title="Correlation Heatmap"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-# ================= TAB 3 =================
-with tab3:
-    st.subheader("Ask AI About Your Uploaded Data")
-    question = st.text_input("Enter your question about the uploaded dataset")
-
-    if question:
-        log_event(f"User Question: {question}")
-
-        if not api_loaded:
-            st.error("The Hugging Face API client is not ready. Please check your token.")
-        else:
-            with st.spinner("Generating insight..."):
-                try:
-                    response = ask_llm_api(question, filtered_df, hf_client)
-                    st.success(response)
-                except Exception as e:
-                    st.error(f"API error: {e}")
-
-# ================= TAB 4 =================
-with tab4:
-    st.subheader("Segmentation (Customizable)")
-
-    numeric_columns = df.select_dtypes(include=["number"]).columns.tolist()
-
-    if len(numeric_columns) < 2:
-        st.warning("Need at least 2 numeric columns for clustering.")
-    else:
-        # 🔥 USER SELECTS FEATURES
-        selected_features = st.multiselect(
-            "Select features for clustering",
-            options=numeric_columns,
-            default=numeric_columns[:3] if len(numeric_columns) >= 3 else numeric_columns
-        )
-
-        if len(selected_features) < 2:
-            st.warning("Select at least 2 features.")
-        else:
-            # Prepare data (handle missing)
-            cluster_data = df[selected_features].dropna()
-
-            st.write(f"Using {len(cluster_data)} rows after removing missing values.")
-
-            k = st.slider("Select Number of Clusters", 2, 6, 3)
-
-            if st.button("Run Clustering"):
-                try:
-                    clustered = run_clustering(cluster_data, k)
-
-                    st.write("Clustered Data Preview")
-                    st.dataframe(clustered.head(), use_container_width=True)
-
-                    # 🔥 USER SELECTS VISUALIZATION AXES
-                    x_axis = st.selectbox("X-axis", selected_features, index=0)
-                    y_axis = st.selectbox("Y-axis", selected_features, index=1)
-
-                    fig = px.scatter(
-                        clustered,
-                        x=x_axis,
-                        y=y_axis,
-                        color="Cluster",
-                        title=f"Clustering: {x_axis} vs {y_axis}"
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
-
-                except Exception as e:
-                    st.error(f"Clustering error: {e}")
-
-# ================= DOWNLOAD =================
-st.markdown("---")
-st.download_button(
-    label="⬇️ Download Filtered Data",
-    data=filtered_df.to_csv(index=False),
-    file_name="filtered_data.csv",
-    mime="text/csv"
-)
-
-# ================= SYSTEM HEALTH =================
-st.sidebar.markdown("### 🩺 System Health")
-st.sidebar.success("Running")
-st.sidebar.write("Logging: Active")
-st.sidebar.write(f"Model: {MODEL_NAME}")
-st.sidebar.write("Inference: Hugging Face API")
-st.sidebar.write("Clustering: KMeans Ready")
+st.plotly_chart(fig)
