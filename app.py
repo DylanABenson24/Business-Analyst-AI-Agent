@@ -248,14 +248,33 @@ with tab1:
     st.subheader("Summary Stats")
     st.write(filtered_df.describe(include="all"))
 
-    st.subheader("Missing Values")
-    missing_df = pd.DataFrame({
-        "Column": filtered_df.columns,
-        "Missing Count": filtered_df.isnull().sum().values,
-        "Missing %": (filtered_df.isnull().mean() * 100).round(2).values
-    })
-    st.dataframe(missing_df, use_container_width=True)
+    st.subheader("Missing Values Overview")
 
+    # Use ORIGINAL df (not filtered)
+    missing_df = get_missing_summary(df)
+    
+    # Metrics (clean for demo)
+    total_missing = df.isna().sum().sum()
+    total_cells = df.shape[0] * df.shape[1]
+    missing_ratio = (total_missing / total_cells) * 100
+    cols_with_missing = (df.isna().sum() > 0).sum()
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Missing Values", int(total_missing))
+    m2.metric("Missing %", f"{missing_ratio:.2f}%")
+    m3.metric("Columns Affected", int(cols_with_missing))
+    
+    st.dataframe(missing_df, use_container_width=True)
+    
+    # Highlight only problematic columns
+    problem_cols = missing_df[missing_df["Missing Count"] > 0]
+    
+    if not problem_cols.empty:
+        st.warning("⚠️ Columns with missing data detected")
+        st.dataframe(problem_cols, use_container_width=True)
+    else:
+        st.success("✅ No missing values detected")
+    
 # ================= TAB 2 =================
 with tab2:
     st.subheader("Interactive Visualizations")
