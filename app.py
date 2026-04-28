@@ -142,6 +142,21 @@ Format your answer as:
 
     return completion.choices[0].message.content.strip()
 
+# ================= MISSING VALUES HELPER =================
+def get_missing_summary(df: pd.DataFrame) -> pd.DataFrame:
+    missing_counts = df.isna().sum()
+    missing_percent = (missing_counts / len(df)) * 100
+
+    summary = pd.DataFrame({
+        "Column": df.columns,
+        "Missing Count": missing_counts.values,
+        "Missing %": missing_percent.round(2).values
+    })
+
+    return summary.sort_values(by="Missing Count", ascending=False).reset_index(drop=True)
+
+
+
 # ================= UI =================
 st.title("📊 AI-Automated Analyst Dashboard")
 
