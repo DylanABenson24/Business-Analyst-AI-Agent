@@ -56,7 +56,7 @@ def load_uploaded_data(uploaded_file) -> pd.DataFrame:
 
 # ================= PREPROCESS =================
 def get_numeric_df(data: pd.DataFrame) -> pd.DataFrame:
-    return data._dtypes(include=["number"]).dropna()
+    return data.select_dtypes(include=["number"]).dropna()
 
 # ================= MODEL: CLUSTERING =================
 def run_clustering(data: pd.DataFrame, k: int = 3) -> pd.DataFrame:
@@ -77,7 +77,7 @@ def build_context(df: pd.DataFrame) -> str:
     sample = df.head(10).to_string(index=False)
 
     numeric_summary = ""
-    numeric_cols = df._dtypes(include=["number"]).columns.tolist()
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
     if numeric_cols:
         numeric_summary = df[numeric_cols].describe().round(2).to_string()
 
