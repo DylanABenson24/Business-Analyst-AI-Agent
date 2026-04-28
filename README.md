@@ -48,4 +48,5 @@ The system follows a modular pipeline architecture:
 
 ---
 
-## 📈 Streamlit UI Link: https://ai-powered-business-analyst-wtkcbsfsequh74ybcbwda5.streamlit.app/
+## 📈 Streamlit UI Link
+https://ai-powered-business-analyst-wtkcbsfsequh74ybcbwda5.streamlit.app/
